@@ -13,17 +13,29 @@ async def generate_questions(book_id: str, num_questions: int = 5):
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
 
-    # Call LLM
-    raw_output = await generate_mcqs(book["text"], num_questions=num_questions)
+    # Call LLM → now returns a list of JSON strings
+    raw_outputs = await generate_mcqs(book["text"], num_questions=num_questions)
 
-    try:
-        questions = json.loads(raw_output)  # Expect valid JSON
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error parsing LLM response: {str(e)}")
+    all_questions = []
+
+    for i, raw in enumerate(raw_outputs):
+        try:
+            parsed = json.loads(raw)  # Expect each chunk to be a valid JSON array
+            all_questions.extend(parsed)
+        except Exception as e:
+            print(f"⚠️ Error parsing chunk {i}: {e}")
+            continue  # skip bad chunks
+
+    if not all_questions:
+        raise HTTPException(status_code=500, detail="No valid questions could be parsed from LLM output")
 
     # Save to DB
-    for q in questions:
+    for q in all_questions:
         q["book_id"] = book_id
         await db.questions.insert_one(q)
 
-    return {"msg": "Questions generated", "count": len(questions), "preview": questions[:2]}
+    return {
+        "msg": "Questions generated",
+        "count": len(all_questions),
+        "preview": all_questions[:2]  # return just 2 for preview
+    }

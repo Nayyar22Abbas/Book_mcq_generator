@@ -20,6 +20,8 @@ async def upload_book(file: UploadFile = File(...)):
         text = ""
         for page in reader.pages:
             text += page.extract_text() or ""
+
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error extracting text: {str(e)}")
 
